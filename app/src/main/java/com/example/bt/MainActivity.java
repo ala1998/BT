@@ -9,8 +9,10 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
@@ -18,7 +20,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import static com.example.bt.DeviceListActivity.prefs;
+import static com.example.bt.DeviceListActivity.btSocket;
 
 public class MainActivity extends Activity {
 
@@ -29,14 +31,13 @@ public class MainActivity extends Activity {
 
     final int handlerState = 0;        				 //used to identify handler message
     private BluetoothAdapter btAdapter = null;
-    private BluetoothSocket btSocket = null;
     private StringBuilder recDataString = new StringBuilder();
     private ImageView light;
     private ConnectedThread mConnectedThread;
-
+    private SharedPreferences prefs=null;
     // SPP UUID service - this should work for most devices
     private static final UUID BTMODULEUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-
+    private SharedPreferences.Editor editor=null;
     // String for MAC address
     private static String address;
 
@@ -69,9 +70,26 @@ public class MainActivity extends Activity {
         }*/
         //Get the MAC address from the DeviceListActivty via EXTRA
         address = intent.getStringExtra("ADDRESS");
-        Toast.makeText(this,address,Toast.LENGTH_LONG).show();
+//        Toast.makeText(this,address,Toast.LENGTH_LONG).show();
         btAdapter = BluetoothAdapter.getDefaultAdapter();       // get Bluetooth adapter
 
+        prefs = getSharedPreferences("com.example.bt", MODE_PRIVATE);
+         editor=prefs.edit();
+       /* if(prefs==null){
+//            Toast.makeText(this,"NULL",Toast.LENGTH_LONG).show();
+        }
+        else {
+            Toast.makeText(this,"NOT NULL",Toast.LENGTH_LONG).show();
+
+            }*/
+        if(prefs.contains("STATE")) {
+//            Toast.makeText(this,""+prefs.getInt("STATE",0),Toast.LENGTH_LONG).show();
+
+            if (prefs.getInt("STATE", 0) == 0)
+                light.setImageResource(R.drawable.ic_off_bulb);
+            else           if (prefs.getInt("STATE", 0) == 1)
+                light.setImageResource(R.drawable.ic_bulb_on);
+        }
         //     Toast.makeText(this, address, Toast.LENGTH_SHORT).show();
         //create device and set the MAC address
         BluetoothDevice device = btAdapter.getRemoteDevice(address);
@@ -87,7 +105,7 @@ public class MainActivity extends Activity {
         {
             if(!btSocket.isConnected())
             btSocket.connect();
-            Toast.makeText(this,"Connected",Toast.LENGTH_LONG).show();
+//            Toast.makeText(this,"Connected",Toast.LENGTH_LONG).show();
         } catch (IOException e) {
          /*   try
             {
@@ -136,28 +154,62 @@ public class MainActivity extends Activity {
         };
 
         checkBTState();
-        if(prefs.getInt("STATE",0)==0)
-        light.setImageResource(R.drawable.ic_off_bulb);
-        else
+
+      /*  if(mConnectedThread.read()==0)
+            light.setImageResource(R.drawable.ic_off_bulb);
+else if(mConnectedThread.read()==1)
             light.setImageResource(R.drawable.ic_bulb_on);
-
-
+        else  if(mConnectedThread.read()==-1)
+            light.setImageResource(R.drawable.ic_off_bulb);
+*/
         // Set up onClick listeners for buttons to send 1 or 0 to turn on/off LED
         light.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                if(state==0) {
+                if(prefs.contains("STATE")) {
+//                    Toast.makeText(MainActivity.this,""+prefs.getInt("STATE",0),Toast.LENGTH_LONG).show();
+
+             /*   if(!mConnectedThread.isAlive())
+                    mConnectedThread.run();*/
+//                if(state==0 && mConnectedThread.isAlive()) {
+                    if (prefs.getInt("STATE", 0) == 0) {
+                        mConnectedThread.write("1");
+
+
+                    }
+//                else   if(state==0 && mConnectedThread.isAlive()){
+                   else if (prefs.getInt("STATE", 0) == 1) {
+
+                        mConnectedThread.write("0");
+
+
+                    }
+
+                }
+                else if(!prefs.contains("STATE"))
+                {
+                    if(state==0) {
+                        mConnectedThread.write("1");
+
+                    }
+                    else
+                    if(state==1) {
+                        mConnectedThread.write("0");
+                     /*   state = 0;
+                        prefs.edit().putInt("STATE", 0);
+                        prefs.edit().commit();*/
+                    }
+
+                }
+       /*   if(prefs.getInt("STATE",0)==-1){
                     mConnectedThread.write("1");
                     state = 1;
+                    prefs.edit().putInt("STATE",state);
+                    prefs.edit().commit();
                     light.setImageResource(R.drawable.ic_bulb_on);
 
-                }
-                else{
-                    mConnectedThread.write("0");
-                    state = 0;
-                    light.setImageResource(R.drawable.ic_off_bulb);
 
                 }
-                prefs.edit().putInt("STATE",state);
+*/
 
                 // Send "0" via Bluetooth
 //                Toast.makeText(getBaseContext(), "Turn off LED", Toast.LENGTH_SHORT).show();
@@ -230,13 +282,13 @@ public class MainActivity extends Activity {
     public void onPause()
     {
         super.onPause();
-        try
+     /*   try
         {
             //Don't leave Bluetooth sockets open when leaving activity
             btSocket.close();
         } catch (IOException e2) {
             Toast.makeText(this,"Close onPause",Toast.LENGTH_LONG).show();
-        }
+        }*/
     }
 
     //Checks that the Android device Bluetooth is available and prompts to be turned on if off
@@ -254,6 +306,12 @@ public class MainActivity extends Activity {
     }
 
     public void showList(View view) {
+      try
+      {
+          btSocket.close();
+      }catch (Exception e){
+          Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show();
+      }
         Intent intent=new Intent(MainActivity.this,DeviceListActivity.class);
         intent.putExtra("Change",true);
         startActivity(intent);
@@ -273,7 +331,8 @@ public class MainActivity extends Activity {
                 //Create I/O streams for connection
                 tmpIn = socket.getInputStream();
                 tmpOut = socket.getOutputStream();
-            } catch (IOException e) { }
+            } catch (IOException e) {
+            }
 
             mmInStream = tmpIn;
             mmOutStream = tmpOut;
@@ -287,7 +346,7 @@ public class MainActivity extends Activity {
             // Keep looping to listen for received messages
             while (true) {
                 try {
-                    bytes = mmInStream.read(buffer);        	//read bytes from input buffer
+                    bytes = mmInStream.read(buffer);            //read bytes from input buffer
                     String readMessage = new String(buffer, 0, bytes);
                     // Send the obtained bytes to the UI Activity via handler
                     bluetoothIn.obtainMessage(handlerState, bytes, -1, readMessage).sendToTarget();
@@ -296,30 +355,108 @@ public class MainActivity extends Activity {
                 }
             }
         }
+
         //write method
         public void write(String input) {
             byte[] msgBuffer = input.getBytes();           //converts entered String into bytes
             try {
-                if(btSocket.isConnected()) {
+                if (btSocket.isConnected()) {
                     mmOutStream.write(msgBuffer);
+                    if(input.equals("1")) {
+                        state = 1;
+                        editor.putInt("STATE", 1);
+                        editor.commit();
+                        light.setImageResource(R.drawable.ic_bulb_on);
+                    }
+                    else if(input.equals("0")) {
+                        state = 0;
+                        editor.putInt("STATE", 0);
+                        editor.commit();
+                        light.setImageResource(R.drawable.ic_off_bulb);
+                    }
 //                   btSocket.close();
                 }
 
-                if(!btSocket.isConnected())
-                {
+                else if (!btSocket.isConnected()) {
                     btSocket.connect();
                     mmOutStream.write(msgBuffer);
+                    if(input.equals("1")) {
+                        state = 1;
+                        editor.putInt("STATE", 1);
+                        editor.commit();
+                        light.setImageResource(R.drawable.ic_bulb_on);
+                    }
+                    else if(input.equals("0")) {
+                        light.setImageResource(R.drawable.ic_off_bulb);
+                        state = 0;
+                        editor.putInt("STATE", 0);
+                        editor.commit();
+                    }
 //                 btSocket.close();
                 }
                 //write bytes over BT connection via outstream
             } catch (IOException e) {
                 //if you cannot write, close the application
-                Toast.makeText(getBaseContext(), e.getMessage(), Toast.LENGTH_LONG).show();
+                Toast.makeText(getBaseContext(), "Ala  Write "+e.getMessage(), Toast.LENGTH_LONG).show();
 //                Toast.makeText(getBaseContext(), "fail to write", Toast.LENGTH_LONG).show();
-              //  finish();
+                //  finish();
+              /* try{
+                   btSocket.close(); //Close connection
+               }
+               catch (Exception ex){
+                   Toast.makeText(MainActivity.this, "Close "+ex.getMessage(), Toast.LENGTH_SHORT).show();
+               }*/
 
             }
         }
+
+        //write method
+      /*  public int read() {
+//            byte[] msgBuffer = input.getBytes();           //converts entered String into bytes
+            try {
+                if (btSocket.isConnected()) {
+                    Toast.makeText(MainActivity.this,""+mmInStream.read(),Toast.LENGTH_LONG).show();
+                    return mmInStream.read();
+                    //                   btSocket.close();
+                }
+
+                if (!btSocket.isConnected()) {
+                    btSocket.connect();
+                    Toast.makeText(MainActivity.this,""+mmInStream.read(),Toast.LENGTH_LONG).show();
+                    return mmInStream.read();
+//                 btSocket.close();
+                }
+                //write bytes over BT connection via outstream
+            } catch (IOException e) {
+                //if you cannot write, close the application
+                Toast.makeText(getBaseContext(), "Read "+e.getMessage(), Toast.LENGTH_LONG).show();
+//                Toast.makeText(getBaseContext(), "fail to write", Toast.LENGTH_LONG).show();
+                //  finish();
+                return -1;
+
+            }
+            return -1;
+        }
+
+*/
     }
+  /*  public void receiveData(BluetoothSocketWrapper socket) throws IOException{
+        InputStream socketInputStream =  socket.getInputStream();
+        byte[] buffer = new byte[256];
+        int bytes;
+
+        // Keep looping to listen for received messages
+        while (true) {
+            try {
+                bytes = socketInputStream.read(buffer);            //read bytes from input buffer
+                String readMessage = new String(buffer, 0, bytes);
+                // Send the obtained bytes to the UI Activity via handler
+                Log.i("logging", readMessage + "");
+            } catch (IOException e) {
+                break;
+            }
+        }
+
+    }*/
 }
 

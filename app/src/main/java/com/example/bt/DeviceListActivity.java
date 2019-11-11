@@ -1,10 +1,13 @@
 package com.example.bt;
 
+import java.io.IOException;
 import java.util.Set;
+import java.util.UUID;
 
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -24,10 +27,12 @@ import android.widget.AdapterView.OnItemClickListener;
 public class DeviceListActivity extends Activity {
     // Debugging for LOGCAT
     private static final String TAG = "DeviceListActivity";
-    private static final boolean D = true;
-    public static SharedPreferences prefs = null;
+//    private static final boolean D = true;
+    public SharedPreferences prefs = null;
     private ListView pairedListView;
-
+    public static BluetoothSocket btSocket = null;
+    private static final UUID BTMODULEUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+//    private String prevAdd="";
     // declare button for launching website and textview for connection status
     Button tlbutton;
     TextView textView1;
@@ -43,9 +48,10 @@ public class DeviceListActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.device_list);
+
         prefs = getSharedPreferences("com.example.bt", MODE_PRIVATE);
 
-        if(!getIntent().getBooleanExtra("Change",false)) {
+        if (!getIntent().getBooleanExtra("Change", false)) {
 
 
             String name = prefs.getString("NAME", null);
@@ -55,7 +61,8 @@ public class DeviceListActivity extends Activity {
 
 //            pairedListView.setVisibility(View.GONE);
 
-
+             /*   TODO: Eza 3emel click tani mrra o ma redi y3mel connect bkhlleeh bl previous, o eza awwal
+                b3ml click o ma redi y3mel connect ma bwddeeh 3la new activity*/
                 Intent intent = new Intent(DeviceListActivity.this, MainActivity.class);
                 intent.putExtra("NAME", name);
                 intent.putExtra("ADDRESS", mac);
@@ -114,17 +121,66 @@ public class DeviceListActivity extends Activity {
             String info = ((TextView) v).getText().toString();
             String address = info.substring(info.length() - 17);
 
-            SharedPreferences.Editor editor = prefs.edit();
-            editor.putString("NAME", info);
-            editor.putString("ADDRESS", address);
-            editor.putBoolean("FIRST",false);
-            editor.commit();
+
+           BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();       // get Bluetooth adapter
+
+            BluetoothDevice device = btAdapter.getRemoteDevice(address);
+
+            try {
+                btSocket = createBluetoothSocket(device);
+
+            } catch (IOException e) {
+                Toast.makeText(getBaseContext(), "Socket creation failed", Toast.LENGTH_LONG).show();
+            }
+//            String prevAdd="";
+            // Establish the Bluetooth socket connection.
+            try
+            {
+                if(!btSocket.isConnected() || btSocket==null)
+                    btSocket.connect();
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putString("NAME", info);
+                editor.putString("ADDRESS", address);
+                editor.putBoolean("FIRST", false);
+                editor.commit();
+                Intent i = new Intent(DeviceListActivity.this, MainActivity.class);
+                i.putExtra("NAME", info);
+                i.putExtra("ADDRESS", address);
+//                prevAdd=address;
+//                prevAdd="ala";
+//                Toast.makeText(DeviceListActivity.this,"Connecting ala",Toast.LENGTH_LONG).show();
+                startActivity(i);
+                Toast.makeText(DeviceListActivity.this,"Connected",Toast.LENGTH_LONG).show();
+            } catch (IOException e) {
+                textView1.setText("Failed to connect...");
+//                Toast.makeText(DeviceListActivity.this,"DisConnecting ala",Toast.LENGTH_LONG).show();
+//                Toast.makeText(DeviceListActivity.this,prevAdd,Toast.LENGTH_LONG).show();
+              /*  if(!prevAdd.equals("")) {
+                    Intent i = new Intent(DeviceListActivity.this, MainActivity.class);
+                    i.putExtra("NAME", info);
+                    i.putExtra("ADDRESS", prevAdd);
+//                prevAdd=address;
+                    startActivity(i);
+                }*/
+
+
+//                Toast.makeText(DeviceListActivity.this,"Connection failed!",Toast.LENGTH_LONG).show();
+
+         /*   try
+            {
+                btSocket.close();
+            } catch (IOException e2)
+            {
+                Toast.makeText(this,"Close onCreate",Toast.LENGTH_LONG).show();
+
+                //insert code to deal with this
+            }*/
+            }
+//            mConnectedThread = new MainActivity.ConnectedThread(btSocket);
+//            mConnectedThread.start();
 //            Toast.makeText(DeviceListActivity.this,address,Toast.LENGTH_LONG).show();
             // Make an intent to start next activity while taking an extra which is the MAC address.
-            Intent i = new Intent(DeviceListActivity.this, MainActivity.class);
-            i.putExtra("NAME", info);
-            i.putExtra("ADDRESS", address);
-            startActivity(i);
+
         }
     };
 
@@ -143,5 +199,10 @@ public class DeviceListActivity extends Activity {
 
             }
         }
+    }
+    private BluetoothSocket createBluetoothSocket(BluetoothDevice device) throws IOException {
+
+        return  device.createRfcommSocketToServiceRecord(BTMODULEUUID);
+        //creates secure outgoing connecetion with BT device using UUID
     }
 }
